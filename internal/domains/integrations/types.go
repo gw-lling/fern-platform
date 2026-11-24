@@ -153,6 +153,7 @@ type CoverageJiraClient interface {
 type CoverageTagRepository interface {
 	GetJiraTagCoverageByProject(ctx context.Context, projectID string) (map[string]tagsdomain.CoverageCount, error)
 	GetSpecRunsByJiraTag(ctx context.Context, projectID, issueKey string) ([]tagsdomain.CoveredSpecRun, error)
+	CountJiraTaggedTestsInRun(ctx context.Context, projectID, runID, issueKey string) (int, error)
 }
 
 // CoverageTree is the assembled result of a requirementCoverage query.

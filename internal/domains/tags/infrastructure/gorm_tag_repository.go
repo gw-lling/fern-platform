@@ -318,6 +318,30 @@ func (r *GormTagRepository) GetSpecRunsByJiraTag(ctx context.Context, projectID,
 	return rows, nil
 }
 
+// CountJiraTaggedTestsInRun counts the spec runs in the test run (matched by its client-supplied
+// run_id) that carry the JIRA tag. A tag on the test run itself covers every spec in it. Each
+// spec is counted once even when tagged at both levels.
+func (r *GormTagRepository) CountJiraTaggedTestsInRun(ctx context.Context, projectID, runID, issueKey string) (int, error) {
+	var count int
+	err := r.db.WithContext(ctx).Raw(`
+		SELECT COUNT(DISTINCT sr.id)
+		FROM   test_runs  tr
+		JOIN   suite_runs su ON su.test_run_id  = tr.id AND su.deleted_at IS NULL
+		JOIN   spec_runs  sr ON sr.suite_run_id = su.id AND sr.deleted_at IS NULL
+		WHERE  tr.project_id = ? AND tr.run_id = ? AND tr.deleted_at IS NULL
+		  AND (EXISTS (
+		           SELECT 1 FROM spec_run_tags srt JOIN tags t ON t.id = srt.tag_id
+		           WHERE  srt.spec_run_id = sr.id AND t.category = 'jira' AND UPPER(t.value) = UPPER(?))
+		    OR EXISTS (
+		           SELECT 1 FROM test_run_tags trt JOIN tags t ON t.id = trt.tag_id
+		           WHERE  trt.test_run_id = tr.id AND t.category = 'jira' AND UPPER(t.value) = UPPER(?)))
+	`, projectID, runID, issueKey, issueKey).Scan(&count).Error
+	if err != nil {
+		return 0, fmt.Errorf("failed to count jira-tagged tests in run: %w", err)
+	}
+	return count, nil
+}
+
 // GetOrCreateTag gets an existing tag by name or creates a new one
 func (r *GormTagRepository) GetOrCreateTag(ctx context.Context, name string) (*domain.Tag, error) {
 	// Try to find existing tag

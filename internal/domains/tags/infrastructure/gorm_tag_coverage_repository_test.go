@@ -364,4 +364,68 @@ var _ = Describe("GormTagRepository/GetJiraTagCoverageByProject", Label("integra
 			Expect(rows).To(BeEmpty())
 		})
 	})
+	Describe("CountJiraTaggedTestsInRun", func() {
+		var jiraTag *database.Tag
+		BeforeEach(func() {
+			jiraTag = &database.Tag{Name: "jira:gwcp-12345", Category: "jira", Value: "gwcp-12345"}
+			Expect(db.Create(jiraTag).Error).NotTo(HaveOccurred())
+		})
+
+		newRun := func(project, runID string) (*database.TestRun, *database.SuiteRun) {
+			tr := &database.TestRun{ProjectID: project, RunID: runID, Status: "passed", StartTime: time.Now()}
+			Expect(db.Create(tr).Error).NotTo(HaveOccurred())
+			su := &database.SuiteRun{TestRunID: tr.ID, SuiteName: "s", Status: "passed", StartTime: time.Now()}
+			Expect(db.Create(su).Error).NotTo(HaveOccurred())
+			return tr, su
+		}
+		addSpec := func(su *database.SuiteRun, tagged bool) *database.SpecRun {
+			sr := &database.SpecRun{SuiteRunID: su.ID, SpecName: "sp", Status: "passed", StartTime: time.Now()}
+			Expect(db.Create(sr).Error).NotTo(HaveOccurred())
+			if tagged {
+				Expect(db.Exec("INSERT INTO spec_run_tags (spec_run_id, tag_id) VALUES (?, ?)", sr.ID, jiraTag.ID).Error).NotTo(HaveOccurred())
+			}
+			return sr
+		}
+		count := func(project, runID string) int {
+			n, err := repo.CountJiraTaggedTestsInRun(ctx, project, runID, "GWCP-12345")
+			Expect(err).NotTo(HaveOccurred())
+			return n
+		}
+
+		It("counts only the tagged specs in the run (case-insensitive)", func() {
+			_, su := newRun("proj-a", "run-1")
+			addSpec(su, true)
+			addSpec(su, true)
+			addSpec(su, false)
+			Expect(count("proj-a", "run-1")).To(Equal(2))
+		})
+
+		It("counts every spec when the run itself is tagged, without double counting", func() {
+			tr, su := newRun("proj-a", "run-1")
+			Expect(db.Create(&database.TestRunTag{TestRunID: tr.ID, TagID: jiraTag.ID}).Error).NotTo(HaveOccurred())
+			addSpec(su, true)
+			addSpec(su, false)
+			addSpec(su, false)
+			Expect(count("proj-a", "run-1")).To(Equal(3))
+		})
+
+		It("is zero for an untagged run, another project's run, or a missing run", func() {
+			_, su := newRun("proj-a", "run-1")
+			addSpec(su, true)
+			_, su2 := newRun("proj-a", "run-2")
+			addSpec(su2, false)
+			Expect(count("proj-a", "run-2")).To(Equal(0))
+			Expect(count("proj-b", "run-1")).To(Equal(0))
+			Expect(count("proj-a", "nope")).To(Equal(0))
+		})
+
+		It("excludes soft-deleted specs and soft-deleted runs", func() {
+			tr, su := newRun("proj-a", "run-1")
+			addSpec(su, true)
+			Expect(db.Delete(addSpec(su, true)).Error).NotTo(HaveOccurred())
+			Expect(count("proj-a", "run-1")).To(Equal(1))
+			Expect(db.Delete(tr).Error).NotTo(HaveOccurred())
+			Expect(count("proj-a", "run-1")).To(Equal(0))
+		})
+	})
 })

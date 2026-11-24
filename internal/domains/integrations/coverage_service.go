@@ -10,8 +10,8 @@ import (
 	tagsdomain "github.com/guidewire-oss/fern-platform/internal/domains/tags/domain"
 )
 
-// jiraKeyPattern matches standard JIRA issue keys (e.g. PROJ-123, CLOUD-4567).
-var jiraKeyPattern = regexp.MustCompile(`^[A-Z][A-Z0-9]+-\d+$`)
+// JiraKeyPattern matches standard JIRA issue keys (e.g. PROJ-123, CLOUD-4567).
+var JiraKeyPattern = regexp.MustCompile(`^[A-Z][A-Z0-9]+-\d+$`)
 
 const jiraAPITimeout = 30 * time.Second
 
@@ -113,7 +113,7 @@ func (s *CoverageService) Build(ctx context.Context, projectID, releaseValue str
 	var stories []JiraIssue
 	for _, chunk := range chunkKeys(epicKeys, 50) {
 		for _, key := range chunk {
-			if !jiraKeyPattern.MatchString(key) {
+			if !JiraKeyPattern.MatchString(key) {
 				return nil, fmt.Errorf("coverage: invalid JIRA issue key %q in Phase 2 batch", key)
 			}
 		}
@@ -152,6 +152,11 @@ func (s *CoverageService) Build(ctx context.Context, projectID, releaseValue str
 // GetSpecRunsByJiraTag returns spec runs tagged with the given JIRA issue key.
 func (s *CoverageService) GetSpecRunsByJiraTag(ctx context.Context, projectID, issueKey string) ([]tagsdomain.CoveredSpecRun, error) {
 	return s.tagRepo.GetSpecRunsByJiraTag(ctx, projectID, issueKey)
+}
+
+// CountJiraTaggedTestsInRun counts the tests in the given test run that carry the JIRA tag.
+func (s *CoverageService) CountJiraTaggedTestsInRun(ctx context.Context, projectID, runID, issueKey string) (int, error) {
+	return s.tagRepo.CountJiraTaggedTestsInRun(ctx, projectID, runID, issueKey)
 }
 
 // resolveConnection fetches the active JIRA connection and decrypts its credential.

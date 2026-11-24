@@ -39,6 +39,10 @@ func (m *mockCoverageTagRepo) GetSpecRunsByJiraTag(_ context.Context, _, _ strin
 	return nil, nil
 }
 
+func (m *mockCoverageTagRepo) CountJiraTaggedTestsInRun(_ context.Context, _, _, _ string) (int, error) {
+	return 0, nil
+}
+
 // mockFieldMappingService implements fieldMappingLookup for tests.
 type mockFieldMappingService struct {
 	entries []integrations.FieldMappingEntry
